@@ -1,0 +1,16 @@
+# lichess database files
+*.zst
+
+# output data files from running scripts
+data/output/
+data/raw/
+
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+**/.ipynb_checkpoints
+*-checkpoint.ipynb   engines/stockfish-ubuntu-x86-64-avx2
+
+# stockfish engine binaries
+engines/stockfish-ubuntu-x86-64-avx2
