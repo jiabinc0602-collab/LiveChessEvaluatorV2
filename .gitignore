@@ -4,6 +4,7 @@
 # output data files from running scripts
 data/output/
 data/raw/
+data/scratch
 
 .venv/
 
@@ -14,3 +15,4 @@ data/raw/
 
 # stockfish engine binaries
 engines/stockfish-ubuntu-x86-64-avx2
+

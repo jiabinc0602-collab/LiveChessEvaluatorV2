@@ -1,58 +1,110 @@
 """
-This script evaluates chess positions using the Stockfish engine and saves the results in a JSON file. It reads FEN strings from a text file, evaluates each position, and writes the evaluation results to an output JSON file.
+This script parallelizes chess position evaluation using a pool of Stockfish engines.
+It dynamically tracks lines processed across all cores for progress updates.
 """
 
 import chess
 import chess.engine
 import json
 import math
+import os
+import sys
+from multiprocessing import Pool, cpu_count
 
-path = "engines/stockfish-ubuntu-x86-64-avx2"
 
-def evaluate_positions():
-    with chess.engine.SimpleEngine.popen_uci(path) as engine:
-        f = open("data/output/lichess_positions.txt", "r")
-        output_file = open("data/output/evaluated_positions.jsonl", "w")
-        
-        processed_lines = 0
-        total_lines = 100000 # Assuming we know the total number of lines in advance; adjust as needed
+ENGINE_PATH = "engines/stockfish-ubuntu-x86-64-avx2"
+INPUT_PATH = "data/lichess_positions.txt"
+OUTPUT_PATH = "data/output/evaluated_positions.jsonl"
+BATCH_SIZE = 1000  # Number of FENs sent to a worker at a time
 
-        for line in f:
-            fen = line.strip()
-            if not fen:
-                continue
-                
+def worker_init():
+    """
+    Initializer executed once when each worker process starts.
+    Gives each process its own dedicated, long-running Stockfish instance.
+    """
+    global worker_engine
+    # Set threads=1 inside Stockfish so it doesn't fight other workers for cores
+    worker_engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
+    worker_engine.configure({"Threads": 1})
+
+def worker_cleanup():
+    """Executed when the worker process shuts down."""
+    global worker_engine
+    if 'worker_engine' in globals():
+        worker_engine.quit()
+
+def evaluate_batch(args):
+    """
+    Processes a localized batch of FEN strings using the worker's dedicated engine.
+    """
+    batch_idx, fens = args
+    evaluated_lines = []
+    
+    global worker_engine
+
+    for fen in fens:
+        fen = fen.strip()
+        if not fen:
+            continue
+            
+        try:
             board = chess.Board(fen)
-            info = engine.analyse(board, chess.engine.Limit(depth=8))
+            info = worker_engine.analyse(board, chess.engine.Limit(depth=8))
             wdl_score = info["score"].white()
             
             if wdl_score.is_mate():
                 mate_moves = wdl_score.mate()
-                if mate_moves > 0:
-                    target = 0.9999
-                else:
-                    target = 0.0001
+                target = 0.9999 if mate_moves > 0 else 0.0001
             else:
                 cp = wdl_score.score()
                 target = 1 / (1 + math.exp(-(cp / 600)))
 
-            data_line = {
-                "fen": fen,
-                "target": target
-            }
-            output_file.write(json.dumps(data_line) + "\n")
+            evaluated_lines.append(json.dumps({"fen": fen, "target": target}) + "\n")
+        except Exception as e:
+            continue
+            
+    return evaluated_lines
 
-            processed_lines += 1
-            if processed_lines % 500 == 0 or processed_lines == total_lines:
-                percent = (processed_lines / total_lines) * 100
-                print(f"Progress: {processed_lines}/{total_lines} positions evaluated ({percent:.1f}%)", end="\r")
+def fen_batch_generator(file_path, batch_size):
+    """Streams FEN lines from disk and groups them into chunks on the fly."""
+    current_batch = []
+    batch_counter = 0
+    with open(file_path, "r") as f:
+        for line in f:
+            current_batch.append(line)
+            if len(current_batch) >= batch_size:
+                yield (batch_counter, current_batch)
+                batch_counter += 1
+                current_batch = []
+        if current_batch:
+            yield (batch_counter, current_batch)
+
+def main():
+    print("🚀 Initializing Parallel Stockfish Evaluation Pool...")
+    
+    num_workers = max(1, cpu_count() - 1)
+    print(f"Spawning {num_workers} parallel workers (1 Stockfish instance per core)...")
+
+    processed_positions = 0
+    
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+    
+    with open(OUTPUT_PATH, "w") as output_file:
+        with Pool(processes=num_workers, initializer=worker_init) as pool:
+        
+            batches = pool.imap(evaluate_batch, fen_batch_generator(INPUT_PATH, BATCH_SIZE), chunksize=1)
+            
+            for evaluated_lines in batches:
+                output_file.writelines(evaluated_lines)
                 
-        f.close()
-        output_file.close()
-        print()
+                processed_positions += len(evaluated_lines)
+                
+                sys.stdout.write(f"\rProgress: {processed_positions:,} positions evaluated & written.")
+                sys.stdout.flush()
+                
+            pool.apply(worker_cleanup)
 
+    print(f"\n🎉 Success! Evaluation complete. File compiled at: {OUTPUT_PATH}")
 
 if __name__ == "__main__":
-    evaluate_positions()
-    print("Finished evaluating positions.")
-    
+    main()

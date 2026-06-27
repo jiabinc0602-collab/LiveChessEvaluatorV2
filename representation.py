@@ -11,13 +11,24 @@ import json
 class ChessDataset(torch.utils.data.Dataset):
     def __init__(self, jsonl_path, use_attack_map=False):
         self.use_attack_map = use_attack_map
-        self.data_entries = []
+
+        raw_entires = []
 
         with open(jsonl_path, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line:
-                    self.data_entries.append(json.loads(line))
+                    raw_entires.append(json.loads(line))
+
+        seen_fens = set()
+        self.data_entries = []
+    
+        # Process and filter the raw entries
+        for entry in raw_entires:
+            fen = entry['fen']
+            if fen not in seen_fens:
+                self.data_entries.append(entry)
+                seen_fens.add(fen)
 
     def __len__(self):
         return len(self.data_entries)
