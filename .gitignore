@@ -16,3 +16,5 @@ data/scratch
 # stockfish engine binaries
 engines/stockfish-ubuntu-x86-64-avx2
 
+# PyTorch model files
+*.pt
