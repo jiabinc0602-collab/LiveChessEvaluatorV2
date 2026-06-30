@@ -18,3 +18,12 @@ engines/stockfish-ubuntu-x86-64-avx2
 
 # PyTorch model files
 *.pt
+
+# pytorch onnx weight graph outputs for model
+*.onnx
+*.onnx.data
+
+# pycache
+__pycache__/
+**/__pycache__/
+*.pyc   

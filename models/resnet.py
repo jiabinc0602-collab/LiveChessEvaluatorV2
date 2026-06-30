@@ -60,6 +60,8 @@ class ChessResNet(nn.Module):
         self.value_bn = nn.BatchNorm2d(2)
         self.relu_value = nn.ReLU(inplace=True)
 
+        self.flatten = nn.Flatten(start_dim=1)
+
         # Fully connected layer for output
         self.fc = nn.Sequential(
             nn.Linear(2 * 8 * 8, 64),  # Flattened size after conv layers
@@ -85,7 +87,7 @@ class ChessResNet(nn.Module):
         out = self.relu_value(self.value_bn(self.value_conv(out)))
         
         # Flatten the output for the fully connected layer
-        out = out.view(out.size(0), -1)
+        out = self.flatten(out)
         
         # Fully connected layers
         out = self.fc(out)
