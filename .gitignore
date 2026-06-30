@@ -27,3 +27,5 @@ engines/stockfish-ubuntu-x86-64-avx2
 __pycache__/
 **/__pycache__/
 *.pyc   
+
+*.png
